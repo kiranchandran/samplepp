@@ -20,7 +20,7 @@
 name: DEV - Build & Deploy
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "develop" ]
   workflow_dispatch:
 
 env:
