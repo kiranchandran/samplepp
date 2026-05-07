@@ -1,0 +1,65 @@
+name: Sample - Build & Deploy
+
+on:
+  workflow_dispatch: 
+  pull_request:
+    branches:
+      - master
+  
+env:  
+  IIS_Web_Site: CCC
+  BUILD_CONFIGURATION : Production
+  
+jobs:
+  Build:
+    runs-on: self-hosted
+    steps:
+  
+    - uses: actions/checkout@v2     
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1
+      
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v1.0.5
+
+    - name: Restore NuGet packages
+      run: nuget restore REIFA-MGLD/REIFA_FundingFinder.sln
+
+    - name: Build
+      run: |
+           msbuild CCC.sln /t:Build /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform="Any CPU" /verbosity:minimal
+    - name: Publish
+      run: |
+           msbuild CCC.sln /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform="Any CPU" /p:DeployOnBuild=true  /p:PublishProfile=FolderProfile
+    
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: FundingFinder
+        path: CCC\bin\app.publish
+
+  Deploy:
+      name: Deploy
+      needs: Build
+      runs-on: self-hosted
+      if: startsWith(github.ref, 'refs/tags/')
+
+      steps:
+      - name: Create Offline htm
+        run: |
+         echo "${{ vars.APP_OFFLINE_HTM }}" > C:/inetpub/wwwroot/${{env.IIS_Web_Site}}/app_offline.htm       
+      
+      - name: Wait for worker pool to stop
+        uses: juliangruber/sleep-action@v1
+        with:
+          time: 3s   
+            
+      - name: Deploy the new changes
+        run: |
+         Copy-Item ./CCC/bin/app.publish/* C:/inetpub/wwwroot/${{env.IIS_Web_Site}} -Recurse -Force
+      
+      - name: Delete Offline htm
+        run: |
+          del C:/inetpub/wwwroot/${{env.IIS_Web_Site}}/app_offline.htm
+      
